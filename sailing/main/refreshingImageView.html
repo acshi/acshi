@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<img id="sailingImg" src="sailing.png">
+
+<script>
+function updateImage()
+{
+    var img = document.getElementById("sailingImg");
+    img.src = "sailing.png#" + new Date().getTime();
+    setTimeout(updateImage, 500);
+}
+updateImage();
+</script>
+
+</body>
+</html>
+
