@@ -2,14 +2,29 @@
 <html>
 <body>
 
-<img id="sailingImg" src="sailing.png">
+<img id="sailingImg" src="sailing.png" />
+<img id="hiddenImg" src="sailing.png" />
 
+<script src="jquery-2.1.4.js"></script>
 <script>
+
+$("#hiddenImg")
+    .on('load', function() { console.log("image loaded correctly"); $("#sailingImg").attr("src", $("#hiddenImg").attr("src")); })
+    .on('error', function() { console.log("error loading image"); })
+    .hide()
+;
+
 function updateImage()
 {
-    var img = document.getElementById("sailingImg");
-    img.src = "sailing.png#" + new Date().getTime();
-    setTimeout(updateImage, 500);
+    //var img = document.getElementById("sailingImg");
+    //img.src = "sailing.png#" + new Date().getTime();
+    $("</img>")
+        .on('load', function() { console.log("image loaded correctly"); $("#sailingImg").attr("src", $("#hiddenImg").attr("src")); })
+        .on('error', function() { console.log("error loading image"); })
+        .attr("src", "sailing.png#" + new Date().getTime())
+    ;
+    $("#hiddenImg").attr("src", "http://localhost:8080/" + new Date().getTime());
+    setTimeout(updateImage, 50);
 }
 updateImage();
 </script>

@@ -2,7 +2,7 @@ package main
 
 import (
     "fmt"
-    "os"
+    //"os"
     "time"
 	"image"
 	"image/color"
@@ -10,6 +10,8 @@ import (
 	"image/png"
 	"math"
 	"math/rand"
+    "net/http"
+    "io"
 )
 
 const outputImageSize = 400
@@ -102,7 +104,7 @@ func drawBoat(x, y int, img *image.Gray) {
     drawArrow(x + int(rollX), y + int(rollY), int(rollLength), boatHeading + math.Pi / 2, img)
 }
 
-func writeSailingImage() {
+func writeSailingImage(outputWriter io.Writer) {
     width := outputImageSize
     height := outputImageSize
     
@@ -128,14 +130,14 @@ func writeSailingImage() {
 
     drawBoat(width / 2, height / 2, img);
 
-    file, err := os.Create("sailing.png")
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
+    // file, err := os.Create("sailing.png")
+    // if err != nil {
+        // fmt.Println(err)
+        // return
+    // }
 
-    png.Encode(file, img)
-    file.Close()
+    png.Encode(outputWriter, img)
+    // file.Close()
 }
 
 func timeInMs() int64 {
@@ -148,6 +150,10 @@ func vecDot(a, b vectorXyz) float64 {
 
 func vecNeg(a vectorXyz) vectorXyz {
     return vectorXyz{-a.x, -a.y, -a.z}
+}
+
+func vecAbs(a vectorXyz) vectorXyz {
+    return vectorXyz{math.Abs(a.x), math.Abs(a.y), math.Abs(a.z)}
 }
 
 func vecAdd(a, b vectorXyz) vectorXyz {
@@ -208,12 +214,7 @@ func torqueOnPart(force, location vectorXyz) vectorXyz {
     return vecCross(location, force)
 }
 
-func physicsUpdate(printDebug bool) {
-    currentMs := timeInMs()
-    elapsedMs := currentMs - lastPhysicsUpdateTime
-    lastPhysicsUpdateTime = currentMs
-    elapsedSec := float64(elapsedMs) / 1000.0
-
+func calculateForcesTorques(printDebug bool) (forces, torques vectorXyz) {
     // For the physics calculations, approximations of center of force
     mainsailForceCenter := vectorXyz{0, 15, 20}
     jibForceCenter := vectorXyz{0, -10, 15}
@@ -227,9 +228,9 @@ func physicsUpdate(printDebug bool) {
     keelConstant := 1.0 // we also give the keel credit for other lateral drag and friction
     rudderConstant := 10.0
 
-    // Friction coefficients (per second)
+    // Friction coefficients (dimensionless)
     axialFriction := 0.05
-    angularFriction := 0.25
+    angularFriction := 50.0
 
     // roughly aproximate
     gravitationalForce := vectorXyz{0, 0, -100}
@@ -242,9 +243,8 @@ func physicsUpdate(printDebug bool) {
     mainsailForce := vecMult(vecForceNormalComp(apparentWindVector, vecFromHeading(boatHeading + mainsailHeading)), mainsailConstant)
     jibForce := vecMult(vecForceNormalComp(apparentWindVector, vecFromHeading(boatHeading + jibHeading)), jibConstant)
     keelForce := vecMult(vecForceNormalComp(vecNeg(boatV), vecFromHeading(boatHeading)), keelConstant)
-    axialDragForce := vecMult(vecForceTangentComp(vecNeg(boatV), vecFromHeading(boatHeading + math.Pi / 2)), axialFriction)
+    axialDragForce := vecMult(vecForceTangentComp(vecMultVec(vecAbs(boatV), vecNeg(boatV)), vecFromHeading(boatHeading + math.Pi / 2)), axialFriction)
     rudderForce := vecMult(vecForceNormalComp(vecNeg(boatV), vecFromHeading(boatHeading + rudderHeading)), rudderConstant)
-    
     mainsailTorque := vecMultVec(momentOfInertiaScalar, torqueOnPart(mainsailForce, mainsailForceCenter))
     jibTorque := vecMultVec(momentOfInertiaScalar, torqueOnPart(jibForce, jibForceCenter))
     keelTorque := vecMultVec(momentOfInertiaScalar, torqueOnPart(keelForce, keelForceCenter))
@@ -254,59 +254,125 @@ func physicsUpdate(printDebug bool) {
     rudderVector.x, rudderVector.y = rotate(rudderVector.x, rudderVector.y, rudderHeading - math.Pi)
     rudderForceCenter := vecAdd(rudderCenter, rudderVector)
     rudderTorque := vecMultVec(momentOfInertiaScalar, torqueOnPart(rudderForce, rudderForceCenter))
-    
-    // Partially constrain force normal to the 
-    
-    angularDragTorque := vecMult(vecNeg(boatW), angularFriction)
+    // -2 -> (|-2| * 2) = 4
+    // 2 -> (|2| * -2) = -4
+    angularDragTorque := vecMult(vecMultVec(vecAbs(boatW), vecNeg(boatW)), angularFriction)
     massCenter := vectorXyz{0, 0, 0}
     massCenter.x, massCenter.z = rotate(baseMassCenter.x, baseMassCenter.z, boatYawRollHeading.y)
     gravityTorque := vecMultVec(momentOfInertiaScalar, torqueOnPart(gravitationalForce, massCenter))
+    
+    forces = vecAdd(vecAdd(vecAdd(mainsailForce, jibForce), keelForce), axialDragForce)
+    torques = vecAdd(vecAdd(vecAdd(vecAdd(vecAdd(mainsailTorque, jibTorque), keelTorque), rudderTorque), gravityTorque), angularDragTorque)
+    
+    if printDebug {
+        // fmt.Printf("target heading: %.2f mainsail heading: %.2f jib heading: %.2f rudder heading: %.2f\n", targetHeading, mainsailHeading, jibHeading, rudderHeading)
+        // fmt.Printf("apparent wind: %.2f windHeading: %.2f, windVector: %.2f\n", apparentWindVector, windDirection, windVector)
+        // fmt.Printf("mainsail: %.2f jib: %.2f keel: %.2f rudder: %.2f\n", mainsailForce, jibForce, keelForce, rudderForce)
+        // fmt.Printf("mainsailT: %.2f jibT: %.2f keelT: %.2f rudderT: %.2f gravityT: %.2f\n", mainsailTorque, jibTorque, keelTorque, rudderTorque, gravityTorque)
+        // fmt.Printf("Pos: %.2f vel: %.2f yawRollHeading: %.2f ang vel: %.2f\n", boatP, boatV, boatYawRollHeading, boatW)
+        fmt.Printf("Position: %.2f Velocity: %.2f, Force: %.2f Drag Force: %.2f\n", boatP, boatV, forces, axialDragForce)
+        fmt.Printf("Angular velocity: %.2f, Torque: %.2f, Drag Torque: %.2f\n", boatW, torques, angularDragTorque)
+        fmt.Printf("Rudder torque: %.2f, rudder force: %.2f, rudder force center: %.2f\n", rudderTorque, rudderForce, rudderForceCenter)
+        velocityHeading := math.Atan2(boatV.y, boatV.x) + math.Pi / 2
+        fmt.Printf("Boat: %.2f, Target: %.2f, Wind: %.2f, Velocity: %.2f\n", boatYawRollHeading.z, targetHeading, windDirection, velocityHeading)
+        fmt.Printf("Mainsail: %.2f, Jib: %.2f, Rudder: %.2f\n\n", mainsailHeading, jibHeading, rudderHeading)
+    }
+    return
+}
 
-    boatA := vecAdd(vecAdd(vecAdd(mainsailForce, jibForce), keelForce), axialDragForce)
-    boatL := vecAdd(vecAdd(vecAdd(vecAdd(vecAdd(mainsailTorque, jibTorque), keelTorque), rudderTorque), gravityTorque), angularDragTorque)
+func physicsUpdate(printDebug bool) {
+    currentMs := timeInMs()
+    elapsedMs := currentMs - lastPhysicsUpdateTime
+    lastPhysicsUpdateTime = currentMs
+    elapsedSec := float64(elapsedMs) / 1000.0
     
-    boatV = vecAdd(boatV, vecMult(boatA, elapsedSec))
-    boatW = vecAdd(boatW, vecMult(boatL, elapsedSec))
-    
-    //boatV = vecMult(boatV, math.Pow(axialFriction, elapsedSec))
-    //boatW = vecMult(boatW, math.Pow(angularFriction, elapsedSec))
+    // wind change
+    windDirection += (rand.Float64() * 2 - 1) * math.Pi / 2 * elapsedSec
+
+    // Velocity verlat physics update algorithm
+    forces, torques := calculateForcesTorques(printDebug)
+    boatVHalfStep := vecAdd(boatV, vecMult(forces, elapsedSec / 2.0))
+    boatWHalfStep := vecAdd(boatW, vecMult(torques, elapsedSec / 2.0))
     
     boatP = vecAdd(boatP, vecMult(boatV, elapsedSec))
     boatYawRollHeading = vecAdd(boatYawRollHeading, vecMult(boatW, elapsedSec))
+    
+    forcesHalfStep, torquesHalfStep := calculateForcesTorques(false)
+    boatV = vecAdd(boatVHalfStep, vecMult(forcesHalfStep, elapsedSec / 2.0))
+    boatW = vecAdd(boatWHalfStep, vecMult(torquesHalfStep, elapsedSec / 2.0))
+    
+    // % perform velocity verlat update
+    // [forces, collidingParticles] = calculateForces(positions, velocities, diameter, boxL);
+    // dampingForces = calculateDamping(positions, velocities, diameter, boxL, dampingB);
+    // forces = forces + dampingForces;
+    // velocityHalfStep = velocities + forces * dt / 2;
+    // positionsStepped = positions + velocityHalfStep * dt;
+    // forcesStepped = calculateForces(positionsStepped, velocityHalfStep, diameter, boxL);
+    // velocityStepped = velocityHalfStep + forcesStepped * dt / 2;
+}
 
-    if printDebug {
-        fmt.Printf("target heading: %.2f mainsail heading: %.2f jib heading: %.2f rudder heading: %.2f\n", targetHeading, mainsailHeading, jibHeading, rudderHeading)
-        fmt.Printf("apparent wind: %.2f windHeading: %.2f, windVector: %.2f\n", apparentWindVector, windDirection, windVector)
-        fmt.Printf("mainsail: %.2f jib: %.2f keel: %.2f rudder: %.2f\n", mainsailForce, jibForce, keelForce, rudderForce)
-        fmt.Printf("mainsailT: %.2f jibT: %.2f keelT: %.2f rudderT: %.2f gravityT: %.2f\n", mainsailTorque, jibTorque, keelTorque, rudderTorque, gravityTorque)
-        fmt.Printf("Pos: %.2f vel: %.2f yawRollHeading: %.2f ang vel: %.2f\n", boatP, boatV, boatYawRollHeading, boatW)
-    }
+func webHandler(w http.ResponseWriter, r *http.Request) {
+    writeSailingImage(w)
+}
+
+// linear interpolation of x in range from minX to maxX
+// onto the range minVal to maxVal.
+// x is coerced into the range minX to maxX if it isn't already.
+func lerp(x, minX, maxX, minVal, maxVal float64) float64 {
+    x = math.Min(math.Max(x, minX), maxX)
+    return (x - minX) / (maxX - minX) * (maxVal - minVal) + minVal
 }
 
 func main() {
+    http.HandleFunc("/", webHandler)
+    go http.ListenAndServe(":8080", nil)
+
     lastPhysicsUpdateTime = timeInMs()
     timeStepOn := 0
-    dt := 0.01
+    dt := 0.001 // time in seconds between physics calculation updates
+    controlInterval := 0.5 // time in seconds between updates to rudder/sail headings
+    reportInterval := 1.0 // time in seconds between outputs of data to console
 
     for {
-        // wind change
-        windDirection += 0 * (rand.Float64() * 2 - 1) * math.Pi / 32
-    
-        // Adjust rudder to get to desired heading
-        if targetHeading < boatYawRollHeading.z {
-            rudderHeading = -math.Pi + math.Pi / 3
-        } else {
-            rudderHeading = math.Pi - math.Pi / 3
+        if timeStepOn % int(controlInterval / dt) == 0 {
+            // Adjust rudder to get to desired heading
+            // Rudder needs to be tangential to the boat velocity to generate
+            // torque needed to turn the boat
+            
+            // Calculate heading of the velocity
+            velocityHeading := math.Atan2(boatV.y, boatV.x) + math.Pi / 2
+            
+            turnLeftHeading := math.Pi / 3
+            turnRightHeading := -math.Pi / 3
+            
+            rudderHeading = lerp(targetHeading - boatYawRollHeading.z, -math.Pi / 2, math.Pi / 2,
+                                 turnLeftHeading, turnRightHeading) + math.Pi + velocityHeading - boatYawRollHeading.z
+            
+            /*if targetHeading < boatYawRollHeading.z {
+                //rudderHeading = -math.Pi + math.Pi / 3
+                rudderHeading = velocityHeading - math.Pi * 2 / 3 - boatYawRollHeading.z
+            } else {
+                //rudderHeading = math.Pi - math.Pi / 3
+                rudderHeading = velocityHeading + math.Pi * 2 / 3 - boatYawRollHeading.z
+            }*/
+            
+            // constrain the heading values to that keep it within math.Pi/3 on either side of straight back
+            rudderHeading = math.Mod(rudderHeading, 2 * math.Pi)
+            rudderHeading = math.Min(math.Max(rudderHeading, math.Pi * 2 / 3), math.Pi * 4 / 3)
+            
+            // make sails catch full wind
+            mainsailHeading = math.Mod(windDirection - math.Pi / 2 - boatYawRollHeading.z, math.Pi)
+            jibHeading = mainsailHeading
+            
+            // but keep jib from being too closed keep it open about pi/8 radians
+            jibHeading = (jibHeading / math.Abs(jibHeading)) * math.Max(math.Abs(jibHeading), 0.4)
         }
-        
-        // make sails catch full wind
-        mainsailHeading = windDirection - math.Pi / 2 - boatYawRollHeading.z
-        jibHeading = mainsailHeading
         
         //boatHeading += math.Pi / 16
         time.Sleep(time.Duration(float64(time.Second) * dt))
-        if timeStepOn % int(1 / dt) == 0 {
-            writeSailingImage()
+        
+        if timeStepOn % int(reportInterval / dt) == 0 {
+            //writeSailingImage()
             physicsUpdate(true)
         } else {
             physicsUpdate(false)
