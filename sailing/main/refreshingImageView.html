@@ -24,9 +24,8 @@ function updateImage()
         .attr("src", "sailing.png#" + new Date().getTime())
     ;
     $("#hiddenImg").attr("src", "http://localhost:8080/" + new Date().getTime());
-    setTimeout(updateImage, 50);
 }
-updateImage();
+setInterval(updateImage, 50);
 </script>
 
 </body>
