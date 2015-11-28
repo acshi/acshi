@@ -81,8 +81,8 @@ func TestCalculateForcesTorques(t *testing.T) {
     boat := boatData{v: vectorXyz{-math.Sqrt(2) / 2.0, math.Sqrt(2) / 2.0, 0},
                     yawRollHeading: vectorXyz{0, 0, -135 / 180.0 * math.Pi},
                     course: CompassDirection(-135),
-                    mainNormal: RelativeDirection(-90),
-                    jibNormal: RelativeDirection(-90),
+                    mainDirection: RelativeDirection(-90),
+                    jibDirection: RelativeDirection(-90),
                     rudderDirection: RelativeDirection(0)}
     wind := windData{direction: CompassDirection(45), speed: 2.0}
     _, torques := calculateForcesTorques(boat, wind, false)
@@ -164,4 +164,11 @@ func TestCalculateForcesTorques(t *testing.T) {
     _, torques = calculateForcesTorques(boat, wind, false)
     assert.True(t, torques.z < baseZTorque,
                 "Magnitude of Z torque %.2f should be < than %.2f (torque without rudder)", torques.z, baseZTorque)
+}
+
+func TestGetHeading(t *testing.T) {
+    assert.Equal(t, 0.0, float64(vectorXyz{0, -1, 0}.GetHeading()))
+    assert.Equal(t, 180.0, float64(vectorXyz{0, 1, 0}.GetHeading()))
+    assert.Equal(t, -90.0, float64(vectorXyz{-1, 0, 0}.GetHeading()))
+    assert.Equal(t, 90.0, float64(vectorXyz{1, 0, 0}.GetHeading()))
 }
