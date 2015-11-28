@@ -381,7 +381,7 @@ func physicsUpdate(boat boatData, wind windData, dt float64, printDebug bool) (b
     elapsedSec := dt//float64(elapsedMs) / 1000.0
     
     // wind change
-    wind.direction = RelativeDirection((rand.Float64() * 2 - 1) * 360 * elapsedSec * 0 + elapsedSec * 5 * 0).Add(wind.direction)
+    /*wind.direction = RelativeDirection((rand.Float64() * 2 - 1) * 360 * elapsedSec * 0 + elapsedSec * 5 * 0).Add(wind.direction)
     // we make sure that their is still possible for our boat to sail to our course direction without beating
     // wind.direction is the direction wind is FROM, so course and wind directions must differ by more than the clearance
     // Clearance can be as low as 45 degrees for some boats, but we may need to be more conservative
@@ -391,7 +391,7 @@ func physicsUpdate(boat boatData, wind windData, dt float64, printDebug bool) (b
         wind.direction = boat.course.Add(ironsClearance)
     } else if courseWindAngle < 0 && courseWindAngle > -ironsClearance {
         wind.direction = boat.course.Add(-ironsClearance)
-    }
+    }*/
     
     // Velocity verlat physics update algorithm
     forces, torques := calculateForcesTorques(boat, wind, printDebug)
@@ -544,7 +544,7 @@ func main() {
     previousInput := 0.0
     integralTerm := 0.0
     // control coefficients
-    proportionK := 2.0
+    proportionK := 1.0
     integralK := 0.2 * controlInterval
     derivativeK := 0.5 / controlInterval
     
@@ -565,22 +565,15 @@ func main() {
             optimalTurnRight := coerceAngleToRange((velocityDirection + 90.0) - (boatHeading + 180) + 60.0, -360, 0)
             turningCenter := (optimalTurnLeft + optimalTurnRight) / 2.0
             
-            bestTurnLeft := math.Max(coerceAngleToRange(optimalTurnLeft, 0, 120), turningCenter)
-            bestTurnLeft = coerceAngleToRange(bestTurnLeft, 0, 120)
-            bestTurnRight := math.Min(coerceAngleToRange(optimalTurnRight, 0, 120), turningCenter)
-            bestTurnRight = coerceAngleToRange(bestTurnRight, 0, 120)
-            
-            turnLeftDirection := bestTurnLeft//optimalTurnLeft + 60.0 //120.0
-            turnRightDirection := bestTurnRight//optimalTurnRight + 60.0 //0.0
-            //turnLeftLimit := coerceAngleToRange(boatHeading - velocityDirection + 120, 0, 120)
-            //turnRightLimit := coerceAngleToRange(boatHeading - velocityDirection + 0, 0, 120)
+            turnLeftDirection := math.Max(coerceAngleToRange(optimalTurnLeft, 0, 120), turningCenter)
+            turnLeftDirection = coerceAngleToRange(turnLeftDirection, 0, 120)
+            turnRightDirection := math.Min(coerceAngleToRange(optimalTurnRight, 0, 120), turningCenter)
+            turnRightDirection = coerceAngleToRange(turnRightDirection, 0, 120)
             
             // Calculate maximum and minimum PID output values currently realizable with our rudder
             // This varies over time as the boat's orientation and velocity and the wind vary
             // Note that positive PID values are negative to indicate to turn left, and positive for right
             // But the rudder direction angles are high(positive) for left and low(negative) for right
-            //pidLeftLimit := lerpangle(turnLeftLimit, turnRightDirection, turnLeftDirection, 100, -100)
-            //pidRightLimit := lerpangle(turnRightLimit, turnRightDirection, turnLeftDirection, 100, -100)
             pidLeftLimit := lerpangle(turnLeftDirection, 0.0, 120.0, 100, -100)
             pidRightLimit := lerpangle(turnRightDirection, 0.0, 120.0, 100, -100)
             
@@ -682,15 +675,43 @@ func main() {
                 boat.jibDirection = boat.mainDirection
             }
             
+            // Use the sails to help us steer to our desired course
+            // Turn to the wind by pulling the mainsail in and freeing the jib
+            // Turn away by pulling the jib in and freeing the mailsail
+            offWindAngle := coerceAngleToRange(apparentWindDirection - float64(boat.getHeading()), -180, 180)
+            turnValue := math.Abs(courseError) * 1.0
+            if (courseError > 0.0 && offWindAngle > 0.0) ||
+               (courseError < 0.0 && offWindAngle < 0.0) {
+                // Sail more towards the wind
+                mainDir := lerp(turnValue, 0, 100, float64(boat.mainDirection), 0.0)
+                jibDir := lerp(turnValue, 0, 100, float64(boat.jibDirection), offWindAngle)
+                boat.mainDirection = RelativeDirection(mainDir)
+                boat.jibDirection = RelativeDirection(jibDir)
+                if timeStepOn % int(reportInterval / dt) == 0 {
+                    fmt.Printf("into main: %.2f jib: %.2f ", boat.mainDirection, boat.jibDirection)
+                }
+           } else {
+                // Sail more away from the wind
+                mainDir := lerp(turnValue, 0, 100, float64(boat.mainDirection), offWindAngle)
+                jibDir := lerp(turnValue, 0, 100, float64(boat.jibDirection), 0.0)
+                boat.mainDirection = RelativeDirection(mainDir)
+                boat.jibDirection = RelativeDirection(jibDir)
+                if timeStepOn % int(reportInterval / dt) == 0 {
+                    fmt.Printf("away main: %.2f jib: %.2f ", boat.mainDirection, boat.jibDirection)
+                }
+           }
+            
             // If we are trying to sail close to the wind direction,
             // approaching sailing into the wind, then we pull the mailsail in
-            if math.Abs(apparentWindDirection - float64(boat.getHeading())) < 45 {
+            // and let the jib out to be in line with the wind
+            /*if math.Abs(apparentWindDirection - float64(boat.getHeading())) < 45 {
                 boat.mainDirection = RelativeDirection(0)
                 boat.jibDirection = RelativeDirection(apparentWindDirection - float64(boat.getHeading()))
-            }
+            }*/
             
-            // but keep jib from being too closed keep it open at least 25 degrees
-            if math.Abs(float64(boat.jibDirection)) < 25.0 {
+            // If the mainsail is less than 25 degrees closed, then
+            // keep jib from being too closed, open at least 25 degrees
+            if math.Abs(float64(boat.mainDirection)) < 25.0 && math.Abs(float64(boat.jibDirection)) < 25.0 {
                 if float64(boat.jibDirection) < 0 {
                     boat.jibDirection = RelativeDirection(-25)
                 } else {
