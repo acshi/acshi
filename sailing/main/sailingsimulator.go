@@ -441,16 +441,6 @@ func coerceAngleToRange(a, minA, maxA float64) float64 {
     return a
 }
 
-// linear interpolation of x in range from minX to maxX
-// onto the range minVal to maxVal.
-// x is coerced into the range minX to maxX if it isn't already.
-// but x, minX, and maxX are all taken to be angles in degrees.
-// So the coersion will be done modulus 360.
-func lerpangle(x, minX, maxX, minVal, maxVal float64) float64 {
-    x = coerceAngleToRange(x, minX, maxX)
-    return (x - minX) / (maxX - minX) * (maxVal - minVal) + minVal
-}
-
 // Finds the angle between two angles in degrees, angles modulo 360
 func angleBetween(a, b float64) float64 {
     a = math.Mod(a, 360)
@@ -574,8 +564,8 @@ func main() {
             // This varies over time as the boat's orientation and velocity and the wind vary
             // Note that positive PID values are negative to indicate to turn left, and positive for right
             // But the rudder direction angles are high(positive) for left and low(negative) for right
-            pidLeftLimit := lerpangle(turnLeftDirection, 0.0, 120.0, 100, -100)
-            pidRightLimit := lerpangle(turnRightDirection, 0.0, 120.0, 100, -100)
+            pidLeftLimit := lerp(turnLeftDirection, 0.0, 120.0, 100, -100)
+            pidRightLimit := lerp(turnRightDirection, 0.0, 120.0, 100, -100)
             
             if timeStepOn % int(reportInterval / dt) == 0 {
                 fmt.Printf("boat: %.2f veloc: %.2f ", boatHeading, velocityDirection)
@@ -634,16 +624,16 @@ func main() {
                 } else {
                     constrainedPidValue = math.Max(math.Min(pidOutputValue, pidRightLimit), pidLeftLimit)
                 }
-                newRudderDir = lerpangle(constrainedPidValue, -100, 100, turnLeftDirection, turnRightDirection)
-                //newRudderDir = lerpangle(constrainedPidValue, pidLeftLimit, pidRightLimit, turnLeftDirection, turnRightDirection)
+                newRudderDir = lerp(constrainedPidValue, -100, 100, turnLeftDirection, turnRightDirection)
+                //newRudderDir = lerp(constrainedPidValue, pidLeftLimit, pidRightLimit, turnLeftDirection, turnRightDirection)
             } else {
                 if (pidLeftLimit < 0 && pidOutputValue > 0) || (pidRightLimit > 0 && pidOutputValue < 0) {
                     constrainedPidValue = 0//(pidLeftLimit + pidRightLimit) / 2.0
                 } else {
                     constrainedPidValue = math.Max(math.Min(pidOutputValue, pidLeftLimit), pidRightLimit)
                 }
-                newRudderDir = lerpangle(constrainedPidValue, -100, 100, turnRightDirection, turnLeftDirection)
-                //newRudderDir = lerpangle(constrainedPidValue, pidRightLimit, pidLeftLimit, turnRightDirection, turnLeftDirection)
+                newRudderDir = lerp(constrainedPidValue, -100, 100, turnRightDirection, turnLeftDirection)
+                //newRudderDir = lerp(constrainedPidValue, pidRightLimit, pidLeftLimit, turnRightDirection, turnLeftDirection)
             }
             
             newRudderDir -= 60
@@ -700,14 +690,6 @@ func main() {
                     fmt.Printf("away main: %.2f jib: %.2f ", boat.mainDirection, boat.jibDirection)
                 }
            }
-            
-            // If we are trying to sail close to the wind direction,
-            // approaching sailing into the wind, then we pull the mailsail in
-            // and let the jib out to be in line with the wind
-            /*if math.Abs(apparentWindDirection - float64(boat.getHeading())) < 45 {
-                boat.mainDirection = RelativeDirection(0)
-                boat.jibDirection = RelativeDirection(apparentWindDirection - float64(boat.getHeading()))
-            }*/
             
             // If the mainsail is less than 25 degrees closed, then
             // keep jib from being too closed, open at least 25 degrees
