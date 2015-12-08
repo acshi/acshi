@@ -27,25 +27,6 @@ type windData struct {
     speed float64
 }
 
-var (
-    /*boatP, boatV vectorXyz // position and velocity
-    boatYawRollHeading = vectorXyz{0, 0, -135 / 180.0 * math.Pi}
-    boatW vectorXyz // angle, angular velocity
-    
-    // 0 for headings means North (up)
-    courseDirection = CompassDirection(-135)
-    // direction wind is coming FROM
-    windDirection = CompassDirection(60)
-    windSpeed = 2.0
-    // mainsail and jib surface normals are relative to the boat's orientation
-    mainsailNormal = RelativeDirection(-30)
-    jibNormal = RelativeDirection(-30)
-    // rudder direction is relative to the negative boat orientation
-    // i.e. 0 means directly back off the end of the boat
-    rudderDirection = RelativeDirection(0)*/
-    //lastPhysicsUpdateTime = int64(0);
-)
-
 type vectorXyz struct {
     x, y, z float64
 }
@@ -119,10 +100,6 @@ func draw_line(start_x ,start_y ,end_x ,end_y int,col color.Gray, img *image.Gra
     if e2 < dx     { err = err + dx; cy = cy + sy; }
   }
 }
-
-/*func sailHeadingToNative(heading float64) float64 {
-    return heading - math.Pi / 2
-}*/
 
 // Draw an arrow centered at x, y
 func drawArrow(x, y, length int, compDir CompassDirection, img *image.Gray) {
@@ -375,35 +352,17 @@ func calculateForcesTorques(boat boatData, wind windData, printDebug bool) (forc
 }
 
 func physicsUpdate(boat boatData, wind windData, dt float64, printDebug bool) (boatData, windData) {
-    //currentMs := timeInMs()
-    //elapsedMs := currentMs - lastPhysicsUpdateTime
-    //lastPhysicsUpdateTime = currentMs
-    elapsedSec := dt//float64(elapsedMs) / 1000.0
-    
-    // wind change
-    /*wind.direction = RelativeDirection((rand.Float64() * 2 - 1) * 360 * elapsedSec * 0 + elapsedSec * 5 * 0).Add(wind.direction)
-    // we make sure that their is still possible for our boat to sail to our course direction without beating
-    // wind.direction is the direction wind is FROM, so course and wind directions must differ by more than the clearance
-    // Clearance can be as low as 45 degrees for some boats, but we may need to be more conservative
-    courseWindAngle := float64(boat.course.Minus(wind.direction))
-    ironsClearance := 45.0
-    if courseWindAngle > 0 && courseWindAngle < ironsClearance {
-        wind.direction = boat.course.Add(ironsClearance)
-    } else if courseWindAngle < 0 && courseWindAngle > -ironsClearance {
-        wind.direction = boat.course.Add(-ironsClearance)
-    }*/
-    
     // Velocity verlat physics update algorithm
     forces, torques := calculateForcesTorques(boat, wind, printDebug)
-    boatVHalfStep := boat.v.Add(forces.Mult(elapsedSec / 2.0))
-    boatWHalfStep := boat.w.Add(torques.Mult(elapsedSec / 2.0))
+    boatVHalfStep := boat.v.Add(forces.Mult(dt / 2.0))
+    boatWHalfStep := boat.w.Add(torques.Mult(dt / 2.0))
     
-    boat.p = boat.p.Add(boat.v.Mult(elapsedSec))
-    boat.yawRollHeading = boat.yawRollHeading.Add(boat.w.Mult(elapsedSec))
+    boat.p = boat.p.Add(boat.v.Mult(dt))
+    boat.yawRollHeading = boat.yawRollHeading.Add(boat.w.Mult(dt))
     
     forcesHalfStep, torquesHalfStep := calculateForcesTorques(boat, wind, false)
-    boat.v = boatVHalfStep.Add(forcesHalfStep.Mult(elapsedSec / 2.0))
-    boat.w = boatWHalfStep.Add(torquesHalfStep.Mult(elapsedSec / 2.0))
+    boat.v = boatVHalfStep.Add(forcesHalfStep.Mult(dt / 2.0))
+    boat.w = boatWHalfStep.Add(torquesHalfStep.Mult(dt / 2.0))
     
     return boat, wind
 }
@@ -508,15 +467,17 @@ func main() {
     
     pidInitialized := false
     
-    // Reset the simulation when you press enter
+    // manage keyboard control from command line
     go func() {
         for {
             byteBuffer := make([]byte, 1)
             bytesRead, _ := os.Stdin.Read(byteBuffer)
+            // Reset the simulation when you press enter
             if bytesRead > 0 && byteBuffer[0] == 'r' {
                 boat, wind = startupSettings()
                 pidInitialized = false
             } else if bytesRead > 0 {
+                // Change the boat coarse by the numbers 0 through 9.
                 if byteBuffer[0] >= byte('0') && byteBuffer[0] <= byte('9') {
                     boat.course = CompassDirection(float64(byteBuffer[0] - byte('0')) * 22.5 - 180).Normalized()
                 }
@@ -524,7 +485,6 @@ func main() {
         }
     }()
 
-    //lastPhysicsUpdateTime = timeInMs()
     timeStepOn := 0
     dt := 0.001 // time in seconds between physics calculation updates
     controlInterval := 0.1 // time in seconds between updates to rudder/sail headings
@@ -551,7 +511,6 @@ func main() {
             // The angles of the rudder most effective at effecting rotation
             // are those that are perpindicular to the velocity of the boat
             optimalTurnLeft := coerceAngleToRange((velocityDirection - 90.0) - (boatHeading - 180) + 60.0, 0, 360)
-            //turningCenter := coerceAngleToRange((velocityDirection) - (boatHeading - 180) + 60.0, -180, 180)
             optimalTurnRight := coerceAngleToRange((velocityDirection + 90.0) - (boatHeading + 180) + 60.0, -360, 0)
             turningCenter := (optimalTurnLeft + optimalTurnRight) / 2.0
             
@@ -575,17 +534,7 @@ func main() {
             // Rudder needs to be tangential to the boat velocity to generate
             // torque needed to turn the boat
             
-            // PID control
-            
-            // the effect of the rudder will depend on magnitude of our velocity
-            scaleFactor := 1.0// * math.Sqrt(boat.v.x * boat.v.x + boat.v.y * boat.v.y + 0 * 25 * boat.w.z * boat.w.z)
-            if scaleFactor != 0.0 {
-                scaleFactor = 1 / scaleFactor
-            }
-            scaledPropK := proportionK * scaleFactor
-            scaledIntK := integralK * scaleFactor
-            scaledDerivK := derivativeK * scaleFactor
-            
+            // PID control            
             pidSetpoint := float64(boat.course)
             // simulate some error in our ability to read our heading
             pidInput := float64(boat.getHeading()) + (rand.Float64() * 2 - 1) * 2 * 0
@@ -597,8 +546,8 @@ func main() {
             }
             
             courseError := float64(RelativeDirection(pidSetpoint - pidInput).Normalized())
-            integralTerm += courseError * scaledIntK
-            if scaledIntK != 0.0 {
+            integralTerm += courseError * integralK
+            if integralK != 0.0 {
                 if pidRightLimit > pidLeftLimit {
                     if integralTerm >= pidRightLimit || integralTerm <= pidLeftLimit {
                         integralTerm = math.Max(math.Min(integralTerm, pidRightLimit), pidLeftLimit)
@@ -610,7 +559,7 @@ func main() {
                 }
             }
             inputDerivative := coerceAngleToRange(pidInput - previousInput, -180, 180)
-            pidOutputValue := courseError * scaledPropK + integralTerm - inputDerivative * scaledDerivK
+            pidOutputValue := courseError * proportionK + integralTerm - inputDerivative * derivativeK
             previousInput = pidInput
             
             // conversion of that output value (from -100 to 100) to a physical rudder orientation
@@ -620,20 +569,18 @@ func main() {
                 // If we can't turn in the direction we want to, go neutral
                 // Set us between the limits so rudder = 0.
                 if (pidLeftLimit > 0 && pidOutputValue < 0) || (pidRightLimit < 0 && pidOutputValue > 0) {
-                    constrainedPidValue = 0//(pidLeftLimit + pidRightLimit) / 2.0
+                    constrainedPidValue = 0
                 } else {
                     constrainedPidValue = math.Max(math.Min(pidOutputValue, pidRightLimit), pidLeftLimit)
                 }
                 newRudderDir = lerp(constrainedPidValue, -100, 100, turnLeftDirection, turnRightDirection)
-                //newRudderDir = lerp(constrainedPidValue, pidLeftLimit, pidRightLimit, turnLeftDirection, turnRightDirection)
             } else {
                 if (pidLeftLimit < 0 && pidOutputValue > 0) || (pidRightLimit > 0 && pidOutputValue < 0) {
-                    constrainedPidValue = 0//(pidLeftLimit + pidRightLimit) / 2.0
+                    constrainedPidValue = 0
                 } else {
                     constrainedPidValue = math.Max(math.Min(pidOutputValue, pidLeftLimit), pidRightLimit)
                 }
                 newRudderDir = lerp(constrainedPidValue, -100, 100, turnRightDirection, turnLeftDirection)
-                //newRudderDir = lerp(constrainedPidValue, pidRightLimit, pidLeftLimit, turnRightDirection, turnLeftDirection)
             }
             
             newRudderDir -= 60
