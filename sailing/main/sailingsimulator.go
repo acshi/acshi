@@ -290,38 +290,38 @@ func calculateForcesTorques(boat boatData, wind windData, printDebug bool) (forc
     boatHeading := boat.getHeading()
     
     // For the physics calculations, approximations of center of force
-    mainsailCenter := vectorXyz{0, -5, 20}
-    mainsailLength := vectorXyz{0, 15.0 / 2, 0}
-    mainsailForceCenter := calculateForceCenter(mainsailCenter, mainsailLength, boat.mainDirection, boatHeading)
+    mainsailRotationCenter := vectorXyz{0, -1, 9}
+    mainsailLength := vectorXyz{0, 5.0, 0}
+    mainsailForceCenter := calculateForceCenter(mainsailRotationCenter, mainsailLength, boat.mainDirection, boatHeading)
     
-    jibCenter := vectorXyz{0, -15, 15}
-    jibLength := vectorXyz{0, 10.0 / 2, 0}
-    jibForceCenter := calculateForceCenter(jibCenter, jibLength, boat.jibDirection, boatHeading)
+    jibRotationCenter := vectorXyz{0, -7, 5}
+    jibLength := vectorXyz{0, 5.0, 0}
+    jibForceCenter := calculateForceCenter(jibRotationCenter, jibLength, boat.jibDirection, boatHeading)
     
-    rudderCenter := vectorXyz{0, 15, 0}
-    rudderLength := vectorXyz{0, 2, 0}
-    rudderForceCenter := calculateForceCenter(rudderCenter, rudderLength, boat.rudderDirection, boatHeading)
+    rudderRotationCenter := vectorXyz{0, 6.5, 0}
+    rudderLength := vectorXyz{0, 1, 0}
+    rudderForceCenter := calculateForceCenter(rudderRotationCenter, rudderLength, boat.rudderDirection, boatHeading)
     
-    keelForceCenter := vectorXyz{0, 0, -30}
-    baseMassCenter := vectorXyz{0, 0, 5} // with no roll
+    keelForceCenter := vectorXyz{0, 0, -5}
+    baseMassCenter := vectorXyz{0, 0, -1} // with no roll yet
     momentOfInertiaScalar := vectorXyz{0.0, 0.01, 0.1} // This will be multipled with the torques to effect angular acceleration
 
     // These constants (unitless) encapsulate lift/drag/density coefficients with air, water, surface areas, etc...
-    mainsailConstant := 5.0 * 0.1
-    jibConstant := 3.0 * 0.1
-    keelConstant := 20.0 // we also give the keel credit for other lateral drag and friction
-    rudderConstant := 10.0 * 0.1
+    mainsailConstant := 0.5 / 10
+    jibConstant := 0.3 / 10
+    keelConstant := 40.0 // we also give the keel credit for other lateral drag and friction
+    rudderConstant := 10.0
 
     // Friction coefficients (dimensionless)
     axialFriction := 0.05
-    angularFriction := 1.0
+    angularFriction := 3.0
     forwardFriction := 0.5
     
     // strength of the noise force on the boat
     noiseConstant := 20.0 * 0
 
     // roughly aproximate
-    gravitationalForce := vectorXyz{0, 0, -100}
+    gravitationalForce := vectorXyz{0, 0, 50}
     
     // negative on the wind speed because the vector is the direction wind is coming FROM
     windVector := vecFromHeading(wind.direction).Mult(-wind.speed)
@@ -339,14 +339,16 @@ func calculateForcesTorques(boat boatData, wind windData, printDebug bool) (forc
     jibTorque := momentOfInertiaScalar.MultVec(torqueOnPart(jibForce, jibForceCenter))
     keelTorque := momentOfInertiaScalar.MultVec(torqueOnPart(keelForce, keelForceCenter))
     rudderTorque := momentOfInertiaScalar.MultVec(torqueOnPart(rudderForce, rudderForceCenter))
-    if printDebug {
-        fmt.Printf("mainsailT %.3f jibT: %.3f keelT: %.3f rudderT: %.3f ", mainsailTorque.z, jibTorque.z, keelTorque.z, rudderTorque.z)
-    }
 
     angularDragTorque := boat.w.Abs().MultVec(boat.w.Neg()).Mult(angularFriction)
     massCenter := vectorXyz{0, 0, 0}
     massCenter.x, massCenter.z = rotate(baseMassCenter.x, baseMassCenter.z, boat.yawRollHeading.y)
     gravityTorque := momentOfInertiaScalar.MultVec(torqueOnPart(gravitationalForce, massCenter))
+    
+    if printDebug {
+        //fmt.Printf("\n\tmainFc %.3f jibGc: %.3f keelFc: %.3f rudderFc: %.3f gravityFc: %.3f ", mainsailForceCenter, jibForceCenter, keelForceCenter, rudderForceCenter, massCenter)
+        //fmt.Printf("\n\tmainsailT %.3f jibT: %.3f keelT: %.3f rudderT: %.3f gravityT: %.3f angularDragT: %.3f yawRollHeading: %.3f ", mainsailTorque, jibTorque, keelTorque, rudderTorque, gravityTorque, angularDragTorque, boat.yawRollHeading)
+    }
     
     forces = mainsailForce.Add(jibForce).Add(keelForce).Add(axialDragForce).Add(forwardDragForce).Add(noiseForce)
     torques = mainsailTorque.Add(jibTorque).Add(keelTorque).Add(rudderTorque).Add(gravityTorque).Add(angularDragTorque)
@@ -367,7 +369,7 @@ func physicsUpdate(boat boatData, wind windData, dt float64, printDebug bool) (b
     boat.w = boatWHalfStep.Add(torquesHalfStep.Mult(dt / 2.0))
     
     if printDebug {
-        fmt.Printf("veloc: %.3f percent ", boat.v.Mag() / wind.speed)
+        //fmt.Printf("veloc: %.3f percent ", boat.v.Mag() / wind.speed)
     }
     
     return boat, wind
@@ -382,6 +384,12 @@ func lerp(x, minX, maxX, minVal, maxVal float64) float64 {
 }
 
 // coerses the angle into the given range, using modular 360 arithmetic
+// If min angle to max angle is 360 degrees, then only modular arithmetic occurs
+// if min angle and max angle do not span 360 degrees, then the value is coerced
+// to the closer of the two angles.
+// coerceAngleToRange(0, 360, 720) = 360
+// coerceAngleToRange(-40, 0, 360) = 320
+// coerceAngleToRange(20, 100, 140) = 100
 func coerceAngleToRange(a, minA, maxA float64) float64 {
     a = math.Mod(a, 360)
     modMinA := math.Mod(minA, 360)
@@ -659,6 +667,23 @@ func autoTunePid(autoTune *autoTuneData, courseError, p, i float64) (newPidValue
     return
 }
 
+func compassDiff(head1, head2 float64) float64 {
+    d := head2-head1   //raw difference
+    if d >= 0.0 {  //head2 is on same compass 'rotation' as head1 and ahead of head1 in a CW sense
+        if d <= 180.0 {  //head1 is just a little behind head2
+            return d
+        } else {
+            return d - 360 //head1 is very far behind head2, so easier to go CCW (must return negative!)
+        }
+    } else {  //d < 0.0, head1 is ahead of head 2 on same 'rotation'
+        if d >= -180.0 {  //head1 is only a little ahead of head2
+            return d 
+        } else {
+            return d + 360 //shorter to go CW to get there, so must be positive
+        }
+    }   
+}
+
 var imageBoat boatData
 var imageWind windData
 
@@ -693,16 +718,16 @@ func main() {
     timeStepOn := 0
     dt := 0.001 // time in seconds between physics calculation updates
     controlInterval := 0.1 // time in seconds between updates to rudder/sail headings
-    reportInterval := 2.0 // time in seconds between outputs of data to console
-    
-    rudderRange := 60.0 // The maximum angle the rudder can be turned in either direction off straight
-    highTurnAngle := 30.0 // The angle against the velocity which will maximize turning
+    reportInterval := 0.5 // time in seconds between outputs of data to console
     
     minimumPointingAngle := 50.0 // The lowest off wind angle we will sail
     runningAngle := 165.0 // The angle at or above which we put both sails all the way out
+    maxSailEase := 90.0 // Angle from straight back to max ease of main (and for now, jib)
+    maxTurnOffset := 5.0 // The angle away from optimal sail position used in turning
+    rudderRange := 60.0 // The maximum angle the rudder can be turned in either direction off straight
+    highTurnAngle := 30.0 // The angle against the velocity which will maximize turning
+    minClosedAngle := 15.0 // The minimum angle to keep the jib open
     
-    maxTurnOffset := 25.0 // The angle away from extremes that maximizes turning with the sails
-
     // PID control of rudder for course correction
     previousInput := 0.0
     integralTerm := 0.0
@@ -711,10 +736,17 @@ func main() {
     integralK := 0.4
     derivativeK := 0.8
     
+    rudderIDecay := 0.95 // decay factor per second of rudder integral when sails could contribute more
+    
     // PI control of sails for course correction
     sailITerm := 0.0
-    sailP := 1.2
-    sailI := 1.2
+    sailP := 5.0
+    sailI := 5.0
+    
+    // Used to reduce shock from abrupt changes
+    // we need to know if we might be suddenly shifting the sails from one side to the other
+    lastOffWindAngle := 0.0
+    //lastIntoWind := false
     
     /*var autoTune autoTuneData
     autoTune.deltaP = 0.1
@@ -736,30 +768,50 @@ func main() {
             boatHeading := float64(boat.getHeading())
             velocityDirection := float64(boat.getVelocityDirection())
             
-            // Use the lower-bound of the rudder as a reference point 0.
-            // So an angle here of 0 would correspond to the rudder being rudderRange
-            // degrees counterclockwise from straight.
+            // Use the straight back from the back of the boat as a reference point 0.
+            // So a positive angle results in a left turn from the rudder, assuming forward motion
             
             // The angles of the rudder most effective at effecting rotation
             // are those that are at highTurnAngle to the velocity of the boat
-            optimalTurnLeft := coerceAngleToRange((velocityDirection - highTurnAngle) - (boatHeading - 180) + rudderRange, 0, 360)
-            optimalTurnRight := coerceAngleToRange((velocityDirection + highTurnAngle) - (boatHeading + 180) + rudderRange, -360, 0)
-            turningCenter := (optimalTurnLeft + optimalTurnRight) / 2.0
+            leeway := compassDiff(boatHeading, velocityDirection)
             
-            turnLeftDirection := math.Max(coerceAngleToRange(optimalTurnLeft, 0, 2 * rudderRange), turningCenter)
-            turnLeftDirection = coerceAngleToRange(turnLeftDirection, 0, 2 * rudderRange)
-            turnRightDirection := math.Min(coerceAngleToRange(optimalTurnRight, 0, 2 * rudderRange), turningCenter)
-            turnRightDirection = coerceAngleToRange(turnRightDirection, 0, 2 * rudderRange)
-            
+            var optimalTurnLeft, optimalTurnRight float64
+            var turnLeftDirection, turnRightDirection float64
+            var pidLeftLimit, pidRightLimit float64
+            // The three cases below are that 1. there are good positions for the rudder to turn
+            // 2. the boat is moving backwards, so the rudder can go the opposite direction
+            // 3. no matter how the rudder is positioned, the boat will be turned and we don't
+            // have rudder control, so just keep the rudder neutral.
             // Calculate maximum and minimum PID output values currently realizable with our rudder
             // This varies over time as the boat's orientation and velocity and the wind vary
-            // Note that positive PID values are negative to indicate to turn left, and positive for right
-            // But the rudder direction angles are high(positive) for left and low(negative) for right
-            pidLeftLimit := lerp(turnLeftDirection, 0.0, 2 * rudderRange, 100, -100)
-            pidRightLimit := lerp(turnRightDirection, 0.0, 2 * rudderRange, 100, -100)
+            // Note that PID values are negative to indicate left turning, and positive for right
+            // But the rudder direction angles depend also on the leeway
+            if math.Abs(leeway) <= rudderRange {
+                optimalTurnLeft = leeway + highTurnAngle
+                optimalTurnRight = leeway - highTurnAngle
+                turnLeftDirection = math.Min(optimalTurnLeft, rudderRange)
+                turnRightDirection = math.Max(optimalTurnRight, -rudderRange)
+                pidLeftLimit = lerp(turnLeftDirection, optimalTurnRight, optimalTurnLeft, 100, -100)
+                pidRightLimit = lerp(turnRightDirection, optimalTurnRight, optimalTurnLeft, 100, -100)
+            } else if math.Abs(leeway) >= 180 - rudderRange {
+                oppositeTurnCenter := compassDiff(math.Mod(boatHeading + 180, 360), velocityDirection)
+                optimalTurnLeft = oppositeTurnCenter - highTurnAngle
+                optimalTurnRight = oppositeTurnCenter + highTurnAngle
+                turnLeftDirection = math.Max(optimalTurnLeft, -rudderRange)
+                turnRightDirection = math.Min(optimalTurnRight, rudderRange)
+                pidLeftLimit = lerp(turnLeftDirection, optimalTurnLeft, optimalTurnRight, -100, 100)
+                pidRightLimit = lerp(turnRightDirection, optimalTurnLeft, optimalTurnRight, -100, 100)
+            } else {
+                optimalTurnLeft = 0
+                optimalTurnRight = 0
+                turnLeftDirection = 0
+                turnRightDirection = 0
+                pidLeftLimit = 0
+                pidRightLimit = 0
+            }
             
             if timeStepOn % int(reportInterval / dt) == 0 {
-                //fmt.Printf("boat: %.2f veloc: %.2f ", boatHeading, velocityDirection)
+                //fmt.Printf("boat: %.2f veloc: %.2f optimalLeft: %.2f optimalRight: %.2f left1: %.2f right1: %.2f ", boatHeading, velocityDirection, optimalTurnLeft, optimalTurnRight, velocityDirection + highTurnAngle - boatHeading + 180, velocityDirection - highTurnAngle - boatHeading + 180)
             }
         
             // Adjust rudder to get to desired heading
@@ -769,7 +821,7 @@ func main() {
             // PID control            
             pidSetpoint := float64(boat.course)
             // simulate some error in our ability to read our heading
-            pidInput := float64(boat.getHeading()) + (rand.Float64() * 2 - 1) * 2 * 0
+            pidInput := float64(boat.getHeading())
             
             if !pidInitialized {
                 pidInitialized = true
@@ -777,7 +829,7 @@ func main() {
                 integralTerm = 0.0
             }
             
-            courseError := float64(RelativeDirection(pidSetpoint - pidInput).Normalized())
+            courseError := coerceAngleToRange(pidSetpoint - pidInput, -180, 180)
             
             // Allow autotuning of the pid control constants
             /*if autoTunePid(&autoTune, courseError, proportionK, integralK) {
@@ -787,25 +839,20 @@ func main() {
                 integralTerm = 0.0
             }*/
             
-            // Make the rudder integral term conditional on the sails integral
-            // term already being maxed out. That gives preference to the sails
-            // fixing this kind of thing.
-            if math.Abs(sailITerm) == 100.0 {
+            // Make adding to the rudder integral term conditional on the sails integral
+            // term being maxed out. That gives preference to the sails fixing this kind of thing.
+            // However, to prevent impulses, we allow changes that would decrease magnitude
+            // and also cause slow decay when the sails could contribute more
+            if math.Abs(sailITerm) >= 95.0 ||
+              (integralTerm > 0.0 && courseError < 0.0 || integralTerm < 0.0 && courseError > 0.0) { // if rudderITerm would decrease in simple PID alg, allow it
                 integralTerm += courseError * integralK  * controlInterval
             } else {
-                integralTerm = 0.0
+                // Allow the integral to smoothly decay
+                integralTerm *= math.Pow(rudderIDecay, controlInterval)
             }
-            // Prevent the integral term from exceeding the limits of the PID output
-            if integralK != 0.0 {
-                if pidRightLimit > pidLeftLimit {
-                    if integralTerm >= pidRightLimit || integralTerm <= pidLeftLimit {
-                        integralTerm = math.Max(math.Min(integralTerm, pidRightLimit), pidLeftLimit)
-                    }
-                } else {
-                    if integralTerm >= pidLeftLimit || integralTerm <= pidRightLimit {
-                        integralTerm = math.Max(math.Min(integralTerm, pidLeftLimit), pidRightLimit)
-                    }
-                }
+            // Prevent the integral term from exceeding the limits of the PID output (windup)
+            if integralTerm >= pidRightLimit || integralTerm <= pidLeftLimit {
+                integralTerm = math.Max(math.Min(integralTerm, pidRightLimit), pidLeftLimit)
             }
             
             inputDerivative := coerceAngleToRange(pidInput - previousInput, -180, 180)
@@ -813,133 +860,101 @@ func main() {
             previousInput = pidInput
             
             // conversion of that output value (from -100 to 100) to a physical rudder orientation
-            var constrainedPidValue, newRudderDir float64
-            if pidRightLimit > pidLeftLimit {
-                // If we can't turn in the direction we want to, go neutral
-                // Set us between the limits so rudder = 0.
-                if (pidLeftLimit > 0 && pidOutputValue < 0) || (pidRightLimit < 0 && pidOutputValue > 0) {
-                    constrainedPidValue = 0
-                } else {
-                    constrainedPidValue = math.Max(math.Min(pidOutputValue, pidRightLimit), pidLeftLimit)
-                }
-                newRudderDir = lerp(constrainedPidValue, -100, 100, turnLeftDirection, turnRightDirection)
-            } else {
-                if (pidLeftLimit < 0 && pidOutputValue > 0) || (pidRightLimit > 0 && pidOutputValue < 0) {
-                    constrainedPidValue = 0
-                } else {
-                    constrainedPidValue = math.Max(math.Min(pidOutputValue, pidLeftLimit), pidRightLimit)
-                }
-                newRudderDir = lerp(constrainedPidValue, -100, 100, turnRightDirection, turnLeftDirection)
-            }
-            newRudderDir -= rudderRange
+            constrainedPidValue := math.Max(math.Min(pidOutputValue, pidRightLimit), pidLeftLimit)
+            newRudderDir := lerp(constrainedPidValue, -100, 100, optimalTurnLeft, optimalTurnRight)
             
-            boat.rudderDirection = RelativeDirection(newRudderDir).Normalized();
+            boat.rudderDirection = RelativeDirection(newRudderDir).Normalized()
             
             if timeStepOn % int(reportInterval / dt) == 0 {
                 fmt.Printf("Course Error: %.2f pterm: %.2f iterm: %.2f dterm: %.2f OutPID: %.2f rudder: %.2f ", courseError, courseError * proportionK, integralTerm, -inputDerivative * derivativeK / controlInterval, constrainedPidValue, boat.rudderDirection)
                 //fmt.Printf("Course Error: %.2f ", courseError);
             }
             
+            //
+            // SAIL CONTROL
+            //
+            
             apparentWindDirection := float64(getApparentWindDirection(boat, wind))
             
-            // make sails maximize force. See points of sail for reference.
-            absoluteOffWind := coerceAngleToRange(float64(wind.direction) - float64(boat.getHeading()), -180, 180)
-            boat.mainDirection = RelativeDirection(lerp(math.Abs(absoluteOffWind), minimumPointingAngle, runningAngle, 0.0, 90.0))
-            boat.jibDirection = boat.mainDirection
+            // Make sails maximize force. See points of sail for reference.
+            // We use this as the base position for the sails from which changes are made for turning
+            offWindAngle := coerceAngleToRange(apparentWindDirection - float64(boat.getHeading()), -180, 180)
+            newMainDirection := lerp(math.Abs(offWindAngle), minimumPointingAngle, runningAngle, 0.0, 90.0) //A first (linear) approximation of where the sails should go, note right now it's always positive
+            newJibDirection := newMainDirection
             
             // correct sign
-            if absoluteOffWind < 0 {
-                boat.mainDirection = -boat.mainDirection
-                boat.jibDirection = -boat.jibDirection
+            if offWindAngle < 0 {
+                newMainDirection = -newMainDirection
+                newJibDirection = -newJibDirection
             }
-            
-            // If in running angle position, jib goes opposite main
-            /*if math.Abs(absoluteOffWind) >= runningAngle {
-                boat.jibDirection = -boat.jibDirection
-            }*/
-            
-            /*mainDirection1 := coerceAngleToRange(apparentWindDirection + 90 - float64(boat.getHeading()), -180, 180)
-            mainDirection2 := coerceAngleToRange(apparentWindDirection - 90 - float64(boat.getHeading()), -180, 180)
-            if math.Abs(mainDirection1) < math.Abs(mainDirection2) {
-                boat.mainDirection = RelativeDirection(mainDirection1)
-            } else {
-                boat.mainDirection = RelativeDirection(mainDirection2)
-            }
-            
-            // Pull the sail fully in if it is on the side closer to the wind
-            if float64(boat.mainDirection) < 0.0 && mainDirection2 < 0.0 {
-                boat.mainDirection = RelativeDirection(0)
-                boat.jibDirection = RelativeDirection(25)
-            } else if float64(boat.mainDirection) > 0.0 && mainDirection2 < 0.0 {
-                boat.mainDirection = RelativeDirection(0)
-                boat.jibDirection = RelativeDirection(-25)
-            } else {
-                boat.jibDirection = boat.mainDirection
-            }*/
             
             // Use the sails to help us steer to our desired course
             // Turn to the wind by pulling the mainsail in and freeing the jib
             // Turn away by pulling the jib in and freeing the mailsail
-            offWindAngle := coerceAngleToRange(apparentWindDirection - float64(boat.getHeading()), -180, 180)
-            maxTurnAngle := offWindAngle
-            if maxTurnAngle > 0 {
-                maxTurnAngle -= maxTurnOffset
-            } else {
-                maxTurnAngle += maxTurnOffset
+            
+            // Make the sign of course error associate negative with away from wind, and positive into wind
+            // This lets the control loop evenly progress back and forth
+            sailCourseError := courseError
+            
+            if offWindAngle < 0.0 { // We're on starboard
+                sailCourseError = -sailCourseError
             }
             
             // PI control
-            sailPTerm := courseError * sailP
-            sailITerm += courseError * sailI * controlInterval
-            // Prevent value from exceeding the maximum effect value at 100
+            sailPTerm := sailCourseError * sailP
+            sailITerm += sailCourseError * sailI * controlInterval
+            // Prevent value from exceeding the maximum effect at 100
             sailITerm = math.Max(math.Min(sailITerm, 100), -100)
-            // Prevent value from having the wrong effect if the course changes a lot
-            // We don't want inertia in the wrong way.
-            if (sailITerm > 0 && courseError < -10) || (sailITerm < 0 && courseError > 10) {
-                sailITerm = 0.0
-            }
             
-            turnValue := math.Abs(sailPTerm + sailITerm)
+            turnValue := sailPTerm + sailITerm
             
             if timeStepOn % int(reportInterval / dt) == 0 {
                 fmt.Printf("sailP: %.3f sailI: %.3f sailOut: %.3f ", sailPTerm, sailITerm, turnValue)
             }
             
-            // Putting the non zero checks on courseError here help stability
-            // We really do not want to oscillate between towards and wawy from the wind.
-            if (courseError > 5.0 && offWindAngle > 0.0) ||
-               (courseError < -5.0 && offWindAngle < 0.0) {
-                // Sail more towards the wind
-                mainDir := lerp(turnValue, 0, 100, float64(boat.mainDirection), maxTurnOffset)
-                jibDir := lerp(turnValue, 0, 100, float64(boat.jibDirection), math.Max(math.Min(maxTurnAngle, 90 - maxTurnOffset), -90 + maxTurnOffset))
-                boat.mainDirection = RelativeDirection(mainDir)
-                boat.jibDirection = RelativeDirection(jibDir)
-                if timeStepOn % int(reportInterval / dt) == 0 {
-                    //fmt.Printf("into main: %.2f jib: %.2f ", boat.mainDirection, boat.jibDirection)
-                }
-           } else {
-                // Sail more away from the wind
-                mainDir := lerp(turnValue, 0, 100, float64(boat.mainDirection), math.Max(math.Min(maxTurnAngle, 90 - maxTurnOffset), -90 + maxTurnOffset))
-                jibDir := lerp(turnValue, 0, 100, float64(boat.jibDirection), maxTurnOffset)
-                boat.mainDirection = RelativeDirection(mainDir)
-                boat.jibDirection = RelativeDirection(jibDir)
-                if timeStepOn % int(reportInterval / dt) == 0 {
-                    //fmt.Printf("away main: %.2f jib: %.2f ", boat.mainDirection, boat.jibDirection)
-                }
-           }
+            // If we are relatively close to the sails switching direction
+            // We don't want that to happen besides when necessary to avoid oscillation
+            if (offWindAngle < -170.0 || offWindAngle > 170.0) &&
+               (offWindAngle > 0.0 && lastOffWindAngle < 0.0 || offWindAngle < 0.0 && lastOffWindAngle > 0.0) {
+                offWindAngle = lastOffWindAngle
+                newMainDirection = math.Copysign(newMainDirection, lastOffWindAngle)
+                newJibDirection = math.Copysign(newJibDirection, lastOffWindAngle)
+            }
             
-            // If the mainsail is less than 25 degrees closed, then
-            // keep jib from being too closed, open at least 25 degrees
-            if math.Abs(float64(boat.mainDirection)) < 25.0 && math.Abs(float64(boat.jibDirection)) < 25.0 {
-                if float64(boat.jibDirection) < 0 {
-                    boat.jibDirection = RelativeDirection(-25)
-                } else {
-                    boat.jibDirection = RelativeDirection(25)
+            // The positions that given maximum turning torque from sails
+            var maxOpenPose, maxClosePose float64
+            if newMainDirection > 0 {
+                maxOpenPose = math.Min(newMainDirection + maxTurnOffset, maxSailEase)
+                maxClosePose = math.Max(newMainDirection - maxTurnOffset, 0)
+            } else {
+                maxOpenPose = math.Max(newMainDirection - maxTurnOffset, -maxSailEase)
+                maxClosePose = math.Min(newMainDirection + maxTurnOffset, 0)
+            }
+            
+            if turnValue > 0.0 {
+                // Sail more towards the wind
+                newMainDirection = lerp(turnValue, 0, 100, newMainDirection, maxClosePose)
+                newJibDirection = lerp(turnValue, 0, 100, newJibDirection, maxOpenPose)
+                if timeStepOn % int(reportInterval / dt) == 0 {
+                    fmt.Printf("offwind: %.2f maxopen: %.2f _into_ main: %.2f jib: %.2f ", offWindAngle, maxOpenPose, newMainDirection, newJibDirection)
+                }
+            } else {
+                // Sail more away from the wind
+                newMainDirection = lerp(-turnValue, 0, 100, newMainDirection, maxOpenPose)
+                newJibDirection = lerp(-turnValue, 0, 100, newJibDirection, maxClosePose)
+                if timeStepOn % int(reportInterval / dt) == 0 {
+                    fmt.Printf("offwind: %.2f maxopen: %.2f _away_ main: %.2f jib: %.2f ", offWindAngle, maxOpenPose, newMainDirection, newJibDirection)
                 }
             }
-            if timeStepOn % int(reportInterval / dt) == 0 {
-                //fmt.Printf("md1: %.2f md2: %.2f appWind: %.2f %.2f mainsail: %.2f jib: %.2f ", mainDirection1, mainDirection2, wind.direction, apparentWindDirection, float64(boat.mainDirection), float64(boat.jibDirection))
+            
+            // To maximize flow around the sails, we keep the jib open at least some
+            if math.Abs(newJibDirection) < minClosedAngle {
+                newJibDirection = math.Copysign(minClosedAngle, newJibDirection)
             }
+            
+            lastOffWindAngle = offWindAngle
+            boat.mainDirection = RelativeDirection(newMainDirection)
+            boat.jibDirection = RelativeDirection(newJibDirection)
         }
         
         if timeStepOn % int(reportInterval / dt) == 0 {
