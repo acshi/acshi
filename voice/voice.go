@@ -1,8 +1,8 @@
 package main
 
 import (
-    "acshi/audio"
-    "acshi/functional"
+    "github.com/acshi/audio"
+    "github.com/acshi/functional"
     "fmt"
     "math"
     "math/rand"
@@ -24,7 +24,6 @@ var (
 )
 
 func init() {
-    //samplingRate := 44100
     waveTableFrequency := 20
     waveTableSize := samplingRate / waveTableFrequency
     
@@ -685,12 +684,13 @@ var (
     vowelIh = Mix(if1, if2, if3)
 
     //signal = vowelEe
-    steps = Sequence(SynthTime(Sawtooth(Constant(110)), 30),
-                     SynthTime(Sawtooth(Constant(440)), 30),
-                     SynthTime(Sawtooth(Constant(220)), 30),
-                     SynthTime(Sawtooth(Constant(880)), 30))
-    signal = Amplify(Constant(0.01), steps);
+    steps = Sequence(SynthTime(Sawtooth(Constant(110)), 2),
+                     SynthTime(Sawtooth(Constant(440)), 2),
+                     SynthTime(Sawtooth(Constant(220)), 2),
+                     SynthTime(Sawtooth(Constant(880)), 2))
+    //signal = Amplify(Constant(0.01), steps);
     //signal = Mix(Amplify(vowelEe, Triangle(Constant(0.5))), Amplify(vowelIh, Triangle(Constant(0.25))))
+    signal = Amplify(Sawtooth(Constant(220)), Triangle(Constant(0.5)))
     
     file, _ = os.Create("C:/Users/acsh/Documents/Go Projects/src/acshi/voice/output.raw")
 )
@@ -718,9 +718,8 @@ func main() {
 
 	device, _ := audio.WaveOutOpen(0)
 
-
     device.Start(makeMusic)
-    time.Sleep(time.Second * 120)
+    time.Sleep(time.Second * 4)
 
 	device.Reset()
 	device.Close()

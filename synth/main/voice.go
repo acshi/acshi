@@ -1,8 +1,8 @@
 package main
 
 import (
-    "acshi/audio"
-    "acshi/synth"
+    "github.com/acshi/audio"
+    "github.com/acshi/synth"
     "fmt"
     "math"
     "math/rand"
@@ -48,8 +48,8 @@ var (
     //signal = synth.Sequence(synth.SynthTime(synth.Diphthong(synth.Vowel_ɜ, synth.Vowel_ɑ, 0.05, 0.1, rawVoice), 0.6))
 
     // lie
-    //signal = synth.Sequence(synth.SynthTime(synth.Diphthong(synth.Vowel_l, synth.Vowel_ɑ, 0.05, 0.06, rawVoice), 0.11),
-    //                        synth.SynthTime(synth.Diphthong(synth.Vowel_ɑ, synth.Vowel_i, 0, 0.4, rawVoice), 0.4))
+    signal = synth.Sequence(synth.SynthTime(synth.Diphthong(synth.Vowel_l, synth.Vowel_ɑ, 0.05, 0.06, rawVoice), 0.11),
+                            synth.SynthTime(synth.Diphthong(synth.Vowel_ɑ, synth.Vowel_i, 0, 0.4, rawVoice), 0.4))
 
     // all
     //signal = synth.Sequence(synth.SynthTime(synth.Diphthong(synth.Vowel_ɑ, synth.Vowel_ɫ, 0.05, 0.2, rawVoice), 0.5))
@@ -63,8 +63,8 @@ var (
                             //synth.SynthTime(synth.Diphthong(synth.Vowel_æ, synth.BSound(synth.Vowel_æ), 0.05, rawVoice), 0.05))
 
     // sell
-    signal = synth.Sequence(synth.SynthTime(synth.SNoise(), 0.1),
-                            synth.SynthTime(synth.VowelSound(synth.Vowel_u, rawVoice), 0.3))
+    //signal = synth.Sequence(synth.SynthTime(synth.SNoise(), 0.1),
+    //                        synth.SynthTime(synth.VowelSound(synth.Vowel_u, rawVoice), 0.3))
 
     //signal = synth.Transition(synth.Constant(0), synth.Constant(0.99), 1, 2)
 
@@ -74,7 +74,7 @@ var (
     //                        synth.SynthTime(synth.Diphthong(synth.Vowel_ɑ, synth.Vowel_i, 0.00, 0.5, rawVoice), 0.4),
     //                        synth.SynthTime(synth.Diphthong(synth.Vowel_ɑ, synth.Vowel_ɜ, 0.00, 0.6, rawVoice), 0.5),
     //                        synth.SynthTime(synth.Diphthong(synth.Vowel_i, synth.Vowel_u, 0.00, 0.1, rawVoice), 0.5),
-    //                          synth.SynthTime(synth.Diphthong(synth.Vowel_ɑ, synth.Vowel_ɫ, 0.05, 0.2, rawVoice), 0.5))
+    //                        synth.SynthTime(synth.Diphthong(synth.Vowel_ɑ, synth.Vowel_ɫ, 0.05, 0.2, rawVoice), 0.5))
 
     file, _ = os.Create("output.raw")
 )

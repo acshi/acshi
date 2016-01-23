@@ -1,7 +1,7 @@
 package synth
 
 import (
-    "acshi/functional"
+    "github.com/acshi/functional"
     "math"
 )
 
