@@ -48,17 +48,17 @@ func (a vectorXyz) vecNormal() vectorXyz {
     return a.Div(a.Mag())
 }
 
-func (force vectorXyz) ForceNormalComp(surfaceDirection vectorXyz) vectorXyz {
+func (a vectorXyz) ForceNormalComp(surfaceDirection vectorXyz) vectorXyz {
     surfaceNormal := surfaceDirection.TangentXy()
-    return surfaceNormal.Mult(force.Dot(surfaceNormal))
+    return surfaceNormal.Mult(a.Dot(surfaceNormal))
 }
 
 func (a vectorXyz) TangentXy() vectorXyz {
     return vectorXyz{-a.y, a.x, 0}
 }
 
-func (force vectorXyz) ForceComponent(surfaceDirection vectorXyz) vectorXyz {
-    return surfaceDirection.Mult(force.Dot(surfaceDirection))
+func (a vectorXyz) ForceComponent(surfaceDirection vectorXyz) vectorXyz {
+    return surfaceDirection.Mult(a.Dot(surfaceDirection))
 }
 
 // x  y  z
@@ -68,6 +68,6 @@ func (a vectorXyz) Cross(b vectorXyz) vectorXyz {
     return vectorXyz{a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x}
 }
 
-func (a vectorXyz) GetHeading() CompassDirection {
-    return CompassDirection(math.Atan2(a.y, a.x) / math.Pi * 180 + 90).Normalized()
+func (a vectorXyz) GetHeading() float64 {
+    return normalizeAngle(math.Atan2(a.y, a.x) / math.Pi * 180 + 90)
 }

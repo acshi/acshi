@@ -12,12 +12,12 @@ const outputImageSize = 400
 
 type boatData struct {
     p, v, yawRollHeading, w vectorXyz
-    mainDirection, jibDirection, rudderDirection RelativeDirection
-    course CompassDirection
+    mainDirection, jibDirection, rudderDirection float64
+    course float64
 }
 
 type windData struct {
-    direction CompassDirection
+    direction float64
     speed float64
 }
 
@@ -42,26 +42,26 @@ type simData struct {
     lastOffWindAngle float64
 }
 
-func (boat boatData) getHeading() CompassDirection {
-    return CompassDirection(boat.yawRollHeading.z / math.Pi * 180).Normalized()
+func (boat boatData) getHeading() float64 {
+    return normalizeAngle(boat.yawRollHeading.z / math.Pi * 180)
 }
 
 // Makes a vector from the compass direction so that north equates to -y, and east to +x.
-func vecFromHeading(heading CompassDirection) vectorXyz {
-    nHeading := heading.ToNativeAngle()
+func vecFromHeading(heading float64) vectorXyz {
+    nHeading := toNativeAngle(heading)
     return vectorXyz{math.Cos(nHeading), -math.Sin(nHeading), 0.0}
 }
 
-func (boat boatData) getVelocityDirection() CompassDirection {
-    return CompassDirection(math.Atan2(boat.v.y, boat.v.x) / math.Pi * 180 + 90).Normalized()
+func (boat boatData) getVelocityDirection() float64 {
+    return normalizeAngle(math.Atan2(boat.v.y, boat.v.x) / math.Pi * 180 + 90)
 }
 
-func getApparentWindDirection(boat boatData, wind windData) CompassDirection {
+func getApparentWindDirection(boat boatData, wind windData) float64 {
     // Calculate the apparent wind heading
     windVector := vecFromHeading(wind.direction).Mult(-wind.speed)
     apparentWindVector := windVector.Sub(boat.v)
-    apparentWindDirection := float64(apparentWindVector.GetHeading()) + 180
-    return CompassDirection(apparentWindDirection).Normalized()
+    apparentWindDirection := apparentWindVector.GetHeading() + 180
+    return normalizeAngle(apparentWindDirection)
 }
 
 func startupSettings() simData {
@@ -72,12 +72,12 @@ func startupSettings() simData {
     s.boat.yawRollHeading = vectorXyz{0, 0, -135 / 180.0 * math.Pi}
     s.boat.w = vectorXyz{0, 0, 0}
     
-    s.boat.course = CompassDirection(-135)
-    s.boat.mainDirection = RelativeDirection(-30)
-    s.boat.jibDirection = RelativeDirection(-30)
-    s.boat.rudderDirection = RelativeDirection(0)
+    s.boat.course = -135
+    s.boat.mainDirection = -30
+    s.boat.jibDirection = -30
+    s.boat.rudderDirection = 0
     
-    s.wind.direction = CompassDirection(45)
+    s.wind.direction = 45
     s.wind.speed = 4.0
     
     s.timeStepOn = 0
@@ -119,9 +119,9 @@ func startupSettings() simData {
 
 func controlUpdate(s *simData) {
     // Calculate the limits of PID output values
-    boatHeading := float64(s.boat.getHeading())
-    velocityDirection := float64(s.boat.getVelocityDirection())
-    apparentWindDirection := float64(getApparentWindDirection(s.boat, s.wind))
+    boatHeading := s.boat.getHeading()
+    velocityDirection := s.boat.getVelocityDirection()
+    apparentWindDirection := getApparentWindDirection(s.boat, s.wind)
     
     if s.timeStepOn % int(s.reportInterval / s.dt) == 0 {
         fmt.Printf("course: %.2f apwind: %.2f boat: %.2f vdir: %.2f vspeed: %.2f ", s.boat.course, apparentWindDirection, boatHeading, velocityDirection, s.boat.v.Mag())
@@ -131,14 +131,14 @@ func controlUpdate(s *simData) {
     // So a positive angle results in a left turn from the rudder, assuming forward motion
     
     // do not even attempt to sail into the wind
-    if math.Abs(compassDiff(float64(s.boat.course), apparentWindDirection)) < s.minimumPointingAngle {
+    if math.Abs(normalizeAngle(s.boat.course - apparentWindDirection)) < s.minimumPointingAngle {
         return
     }
     
     // The angles of the rudder most effective at effecting rotation
     // are those that are at highTurnAngle to the velocity of the boat
     // leeway is just the difference between the physical heading of the boat and the direction it is actually moving in
-    leeway := compassDiff(boatHeading, velocityDirection)
+    leeway := normalizeAngle(velocityDirection - boatHeading)
     
     var optimalTurnLeft, optimalTurnRight float64
     var turnLeftDirection, turnRightDirection float64
@@ -160,7 +160,7 @@ func controlUpdate(s *simData) {
         pidLeftLimit = lerp(turnLeftDirection, optimalTurnRight, optimalTurnLeft, 100, -100)
         pidRightLimit = lerp(turnRightDirection, optimalTurnRight, optimalTurnLeft, 100, -100)
     } else if math.Abs(leeway) >= 180 - s.rudderRange {
-        oppositeTurnCenter := compassDiff(math.Mod(boatHeading + 180, 360), velocityDirection)
+        oppositeTurnCenter := normalizeAngle(velocityDirection - (boatHeading + 180))
         optimalTurnLeft = oppositeTurnCenter - s.highTurnAngle
         optimalTurnRight = oppositeTurnCenter + s.highTurnAngle
         turnLeftDirection = math.Max(optimalTurnLeft, -s.rudderRange)
@@ -194,7 +194,7 @@ func controlUpdate(s *simData) {
         s.integralTerm = 0.0
     }
     
-    courseError := coerceAngleToRange(pidSetpoint - pidInput, -180, 180)
+    courseError := angleToRange(pidSetpoint - pidInput, -180, 180)
     
     // Make adding to the rudder integral term conditional on the sails integral
     // term being maxed out. That gives preference to the sails fixing this kind of thing.
@@ -212,7 +212,7 @@ func controlUpdate(s *simData) {
         s.integralTerm = math.Max(math.Min(s.integralTerm, pidRightLimit), pidLeftLimit)
     }
     
-    inputDerivative := coerceAngleToRange(pidInput - s.previousInput, -180, 180)
+    inputDerivative := angleToRange(pidInput - s.previousInput, -180, 180)
     pidOutputValue := courseError * s.proportionK + s.integralTerm - inputDerivative * s.derivativeK / s.controlInterval
     s.previousInput = pidInput
     
@@ -220,7 +220,7 @@ func controlUpdate(s *simData) {
     constrainedPidValue := math.Max(math.Min(pidOutputValue, pidRightLimit), pidLeftLimit)
     newRudderDir := lerp(constrainedPidValue, -100, 100, optimalTurnLeft, optimalTurnRight)
     
-    s.boat.rudderDirection = RelativeDirection(newRudderDir).Normalized()
+    s.boat.rudderDirection = newRudderDir
     
     if s.timeStepOn % int(s.reportInterval / s.dt) == 0 {
         fmt.Printf("\n\terror: %.2f pterm: %.2f iterm: %.2f dterm: %.2f Out: %.2f rudder: %.2f ", courseError, courseError * s.proportionK, s.integralTerm, -inputDerivative * s.derivativeK / s.controlInterval, constrainedPidValue, s.boat.rudderDirection)
@@ -233,7 +233,7 @@ func controlUpdate(s *simData) {
     
     // Make sails maximize force. See points of sail for reference.
     // We use this as the base position for the sails from which changes are made for turning
-    offWindAngle := coerceAngleToRange(apparentWindDirection - float64(s.boat.getHeading()), -180, 180)
+    offWindAngle := angleToRange(apparentWindDirection - float64(s.boat.getHeading()), -180, 180)
     newMainDirection := lerp(math.Abs(offWindAngle), s.minimumPointingAngle, s.runningAngle, 0.0, 90.0) //A first (linear) approximation of where the sails should go, note right now it's always positive
     newJibDirection := newMainDirection
     
@@ -308,8 +308,8 @@ func controlUpdate(s *simData) {
     }
     
     s.lastOffWindAngle = offWindAngle
-    s.boat.mainDirection = RelativeDirection(newMainDirection)
-    s.boat.jibDirection = RelativeDirection(newJibDirection)
+    s.boat.mainDirection = newMainDirection
+    s.boat.jibDirection = newJibDirection
 }
 
 func performTimestep(s *simData) {
@@ -364,7 +364,7 @@ func main() {
             default:
                 // Change the boat coarse by the numbers 0 through 9.
                 if byteBuffer[0] >= byte('0') && byteBuffer[0] <= byte('9') {
-                    sim.boat.course = CompassDirection(float64(byteBuffer[0] - byte('0')) * 22.5 - 180).Normalized()
+                    sim.boat.course = normalizeAngle(float64(byteBuffer[0] - byte('0')) * 22.5 - 180)
                 }
             }
         }

@@ -9,56 +9,56 @@ import (
     "math"
 )
 
-func draw_line(start_x, start_y, end_x, end_y int, col color.Gray, img *image.Gray) {
+func drawLine(startX, startY, endX, endY int, col color.Gray, img *image.Gray) {
   // Bresenham's
-  var cx int = start_x;
-  var cy int = start_y;
+  var cx = startX;
+  var cy = startY;
  
-  var dx int = end_x - cx;
-  var dy int = end_y - cy;
+  var dx = endX - cx;
+  var dy = endY - cy;
   if dx<0 { dx = 0-dx; }
   if dy<0 { dy = 0-dy; }
  
   var sx int;
   var sy int;
-  if cx < end_x { sx = 1; } else { sx = -1; }
-  if cy < end_y { sy = 1; } else { sy = -1; }
-  var err int = dx-dy;
+  if cx < endX { sx = 1; } else { sx = -1; }
+  if cy < endY { sy = 1; } else { sy = -1; }
+  var err = dx-dy;
  
   var n int;
   for n=0;n<1000;n++ {
     img.SetGray(cx, cy, col)
-    if((cx==end_x) && (cy==end_y)) {return;}
-    var e2 int = 2*err;
+    if((cx==endX) && (cy==endY)) {return;}
+    var e2 = 2*err;
     if e2 > (0-dy) { err = err - dy; cx = cx + sx; }
     if e2 < dx     { err = err + dx; cy = cy + sy; }
   }
 }
 
 // Draw an arrow centered at x, y
-func drawArrow(x, y, length int, compDir CompassDirection, img *image.Gray) {
-    headingX, headingY := rotate(0, float64(length) / 2, float64(compDir) * math.Pi / 180)
-    arrowX, arrowY := rotate(0, float64(length) / 3, float64(compDir + 45) * math.Pi / 180)
+func drawArrow(x, y, length int, compDir float64, img *image.Gray) {
+    headingX, headingY := rotate(0, float64(length) / 2, compDir * math.Pi / 180)
+    arrowX, arrowY := rotate(0, float64(length) / 3, (compDir + 45) * math.Pi / 180)
     arrowX, arrowY = arrowX - headingX, arrowY - headingY
-    draw_line(x - int(headingX), y - int(headingY), x + int(headingX), y + int(headingY), color.Gray{0}, img)
-    draw_line(x - int(headingX), y - int(headingY), x + int(arrowX), y + int(arrowY), color.Gray{0}, img)
+    drawLine(x - int(headingX), y - int(headingY), x + int(headingX), y + int(headingY), color.Gray{0}, img)
+    drawLine(x - int(headingX), y - int(headingY), x + int(arrowX), y + int(arrowY), color.Gray{0}, img)
 }
 
 // Draw an arrow with the point at x, y
-func drawArrowFromTop(x, y, length int, compDir CompassDirection, img *image.Gray) {
-    headingX, headingY := rotate(0, float64(length), float64(compDir) * math.Pi / 180)
-    arrowX, arrowY := rotate(0, float64(length) / 3, float64(compDir + 45) * math.Pi / 180)
-    draw_line(x, y, x + int(headingX), y + int(headingY), color.Gray{0}, img)
-    draw_line(x, y, x + int(arrowX), y + int(arrowY), color.Gray{0}, img)
+func drawArrowFromTop(x, y, length int, compDir float64, img *image.Gray) {
+    headingX, headingY := rotate(0, float64(length), compDir * math.Pi / 180)
+    arrowX, arrowY := rotate(0, float64(length) / 3, (compDir + 45) * math.Pi / 180)
+    drawLine(x, y, x + int(headingX), y + int(headingY), color.Gray{0}, img)
+    drawLine(x, y, x + int(arrowX), y + int(arrowY), color.Gray{0}, img)
 }
 
 // Draw an arrow with the base at x, y
-func drawArrowFromBase(x, y, length int, compDir CompassDirection, img *image.Gray) {
-    headingX, headingY := rotate(0, float64(-length), float64(compDir) * math.Pi / 180)
-    arrowX, arrowY := rotate(0, float64(-length) / 3, float64(compDir + 45) * math.Pi / 180)
+func drawArrowFromBase(x, y, length int, compDir float64, img *image.Gray) {
+    headingX, headingY := rotate(0, float64(-length), compDir * math.Pi / 180)
+    arrowX, arrowY := rotate(0, float64(-length) / 3, (compDir + 45) * math.Pi / 180)
     arrowX, arrowY = headingX - arrowX, headingY - arrowY
-    draw_line(x, y, x + int(headingX), y + int(headingY), color.Gray{0}, img)
-    draw_line(x + int(headingX), y + int(headingY), x + int(arrowX), y + int(arrowY), color.Gray{0}, img)
+    drawLine(x, y, x + int(headingX), y + int(headingY), color.Gray{0}, img)
+    drawLine(x + int(headingX), y + int(headingY), x + int(arrowX), y + int(arrowY), color.Gray{0}, img)
 }
 
 
@@ -72,16 +72,16 @@ func drawBoat(boat boatData, x, y int, img *image.Gray) {
     boatAngle := boat.yawRollHeading.z
 
     jibX, jibY := rotate(0.0, -jibLength - interspace - 5.0, boatAngle)
-    drawArrowFromTop(x + int(jibX), y + int(jibY), int(jibLength), boat.jibDirection.Add(boatHeading), img);
+    drawArrowFromTop(x + int(jibX), y + int(jibY), int(jibLength), boat.jibDirection + boatHeading, img);
     
     mainsailX, mainsailY := rotate(0.0, -5.0, boatAngle)
-    drawArrowFromTop(x + int(mainsailX), y + int(mainsailY), int(mainsailLength), boat.mainDirection.Add(boatHeading), img)
+    drawArrowFromTop(x + int(mainsailX), y + int(mainsailY), int(mainsailLength), boat.mainDirection + boatHeading, img)
     
     rudderX, rudderY := rotate(0.0, mainsailLength - 5.0 + interspace, boatAngle)
-    drawArrowFromBase(x + int(rudderX), y + int(rudderY), int(rudderLength), boat.rudderDirection.Add(boatHeading).Add(180), img)
+    drawArrowFromBase(x + int(rudderX), y + int(rudderY), int(rudderLength), boat.rudderDirection + boatHeading + 180, img)
 
     rollLength := boat.yawRollHeading.y / (math.Pi / 2) * totalLength
-    drawArrowFromBase(x, y, int(rollLength), boatHeading.Add(90), img)
+    drawArrowFromBase(x, y, int(rollLength), boatHeading + 90, img)
 }
 
 func writeSailingImage(boat boatData, wind windData, outputWriter io.Writer) {
@@ -106,10 +106,10 @@ func writeSailingImage(boat boatData, wind windData, outputWriter io.Writer) {
     }
     
     // Debugging N S W E arrows
-    drawArrow(width / 2 - 15, 25, 30, CompassDirection(0), img)
-    drawArrow(width / 2 - 15, height - 25, 30, CompassDirection(180), img)
-    drawArrow(25, height / 2 - 15, 30, CompassDirection(-90), img)
-    drawArrow(width - 25, height / 2 - 15, 30, CompassDirection(90), img)
+    drawArrow(width / 2 - 15, 25, 30, 0, img)
+    drawArrow(width / 2 - 15, height - 25, 30, 180, img)
+    drawArrow(25, height / 2 - 15, 30, -90, img)
+    drawArrow(width - 25, height / 2 - 15, 30, 90, img)
 
     drawArrow(25, 25, 40, boat.course, img);
     drawArrow(width - 25, 25, 40, wind.direction, img);

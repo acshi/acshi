@@ -10,9 +10,9 @@ func torqueOnPart(force, location vectorXyz) vectorXyz {
     return location.Cross(force)
 }
 
-func calculateForceCenter(baseCenter, length vectorXyz, partHeading RelativeDirection, boatHeading CompassDirection) vectorXyz {
-    length.x, length.y = rotate(length.x, length.y, float64(partHeading.Add(boatHeading)) * math.Pi / 180)
-    baseCenter.x, baseCenter.y = rotate(baseCenter.x, baseCenter.y, float64(boatHeading) * math.Pi / 180)
+func calculateForceCenter(baseCenter, length vectorXyz, partHeading float64, boatHeading float64) vectorXyz {
+    length.x, length.y = rotate(length.x, length.y, (partHeading + boatHeading) * math.Pi / 180)
+    baseCenter.x, baseCenter.y = rotate(baseCenter.x, baseCenter.y, boatHeading * math.Pi / 180)
     forceCenter := baseCenter.Add(length)
     return forceCenter
 }
@@ -58,12 +58,12 @@ func calculateForcesTorques(boat boatData, wind windData, printDebug bool) (forc
     windVector := vecFromHeading(wind.direction).Mult(-wind.speed)
     apparentWindVector := windVector.Sub(boat.v)
     
-    mainsailForce := apparentWindVector.ForceNormalComp(vecFromHeading(boat.mainDirection.Add(boatHeading))).Mult(mainsailConstant)
-    jibForce := apparentWindVector.ForceNormalComp(vecFromHeading(boat.jibDirection.Add(boatHeading))).Mult(jibConstant)
+    mainsailForce := apparentWindVector.ForceNormalComp(vecFromHeading(boat.mainDirection + boatHeading)).Mult(mainsailConstant)
+    jibForce := apparentWindVector.ForceNormalComp(vecFromHeading(boat.jibDirection + boatHeading)).Mult(jibConstant)
     keelForce := boat.v.Neg().ForceNormalComp(vecFromHeading(boatHeading)).Mult(keelConstant)
-    axialDragForce := boat.v.Abs().MultVec(boat.v.Neg()).ForceComponent(vecFromHeading(boatHeading.Add(90))).Mult(axialFriction)
+    axialDragForce := boat.v.Abs().MultVec(boat.v.Neg()).ForceComponent(vecFromHeading(boatHeading + 90)).Mult(axialFriction)
     forwardDragForce := boat.v.Abs().MultVec(boat.v.Neg()).Mult(forwardFriction)
-    rudderForce := boat.v.Neg().ForceComponent(vecFromHeading(boat.rudderDirection.Add(boatHeading.Add(90)))).Mult(rudderConstant)
+    rudderForce := boat.v.Neg().ForceComponent(vecFromHeading(boat.rudderDirection + boatHeading + 90)).Mult(rudderConstant)
     noiseForce := vectorXyz{rand.Float64() * 2 - 1, rand.Float64() * 2 - 1, 0.0}.Mult(noiseConstant)
     
     mainsailTorque := momentOfInertiaScalar.MultVec(torqueOnPart(mainsailForce, mainsailForceCenter))
