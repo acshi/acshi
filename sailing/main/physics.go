@@ -81,7 +81,7 @@ func calculateForcesTorques(boat boatData, wind windData, printDebug bool) (forc
 		//fmt.Printf("\n\tmainsailT %.3f jibT: %.3f keelT: %.3f rudderT: %.3f gravityT: %.3f angularDragT: %.3f yawRollHeading: %.3f ", mainsailTorque, jibTorque, keelTorque, rudderTorque, gravityTorque, angularDragTorque, boat.yawRollHeading)
 	}
 
-	forces = mainsailForce.Add(jibForce).Add(keelForce).Add(axialDragForce).Add(forwardDragForce)//.Add(noiseForce)
+	forces = mainsailForce.Add(jibForce).Add(keelForce).Add(axialDragForce).Add(forwardDragForce) //.Add(noiseForce)
 	torques = mainsailTorque.Add(jibTorque).Add(keelTorque).Add(rudderTorque).Add(gravityTorque).Add(angularDragTorque)
 	return
 }

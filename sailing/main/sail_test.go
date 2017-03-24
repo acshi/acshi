@@ -12,19 +12,19 @@ func TestCanary(t *testing.T) {
 }
 
 func TestFastSinCos(t *testing.T) {
-	assert.Equal(t, 1.0, fastSin(math.Pi / 2))
-	assert.Equal(t, -1.0, fastSin(-math.Pi / 2))
+	assert.Equal(t, 1.0, fastSin(math.Pi/2))
+	assert.Equal(t, -1.0, fastSin(-math.Pi/2))
 	assert.Equal(t, 0.0, fastSin(0))
 	assert.Equal(t, 0.0, fastSin(math.Pi))
 	assert.Equal(t, 0.0, fastSin(-math.Pi))
-	assert.Equal(t, 0.0, fastSin(2 * math.Pi))
-	
-	assert.Equal(t, 0.0, fastCos(math.Pi / 2))
-	assert.Equal(t, 0.0, fastCos(-math.Pi / 2))
+	assert.Equal(t, 0.0, fastSin(2*math.Pi))
+
+	assert.Equal(t, 0.0, fastCos(math.Pi/2))
+	assert.Equal(t, 0.0, fastCos(-math.Pi/2))
 	assert.Equal(t, 1.0, fastCos(0))
 	assert.Equal(t, -1.0, fastCos(math.Pi))
 	assert.Equal(t, -1.0, fastCos(-math.Pi))
-	assert.Equal(t, 1.0, fastCos(2 * math.Pi))
+	assert.Equal(t, 1.0, fastCos(2*math.Pi))
 }
 
 func TestNormalization(t *testing.T) {

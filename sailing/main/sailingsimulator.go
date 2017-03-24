@@ -1,14 +1,14 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"os"
-	"time"
-	"flag"
-	"log"
 	"runtime/pprof"
+	"time"
 )
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
@@ -45,7 +45,7 @@ type simData struct {
 	sailITerm, sailP, sailI float64
 
 	lastOffWindAngle float64
-	
+
 	shouldPrint bool
 }
 
@@ -100,31 +100,33 @@ func startupSettings() simData {
 	s.previousInput = 0.0
 	s.integralTerm = 0.0
 	// control coefficients
-	s.proportionK = 1.0
+	s.proportionK = 4.0
 	s.integralK = 0.4
-	s.derivativeK = 0.8
-	
-	if true {
-		s.proportionK = 6.84416
-		s.integralK = 5.97056
-		s.derivativeK = 2.54453
-		// Best values: 5.72722 3.20107 2.12367 with score: 32.07324
-		// Best values: 8.56316 -0.01802 3.26637 with score: 27.81168
-		// Best values: 14.20511 10.73425 6.22322 with score: 21.01191
-		// Best values: 6.84416 5.97056 2.54453 with score: 22.40385
-	}
+	s.derivativeK = 2.0
 
-	s.rudderIDecay = 0.95 // decay factor per second of rudder integral when sails could contribute more
+    s.rudderIDecay = 0.95 // decay factor per second of rudder integral when sails could contribute more
 
 	// PI control of sails for course correction
 	s.sailITerm = 0.0
 	s.sailP = 5.0
 	s.sailI = 5.0
 
+	if true {
+		s.proportionK, s.integralK, s.derivativeK = 7.94447, 0.25778, 3.83347
+        s.sailP, s.sailI = 8.90936, 0.39767
+		// Best values: 5.72722 3.20107 2.12367 with score: 32.07324
+		// Best values: 8.56316 -0.01802 3.26637 with score: 27.81168
+		// Best values: 14.20511 10.73425 6.22322 with score: 21.01191
+		// Best values: 6.84416 5.97056 2.54453 with score: 22.40385
+        // Best values: 12.53007 7.61016 4.70147 13.31001 0.12787 with score: 20.72589
+        // Best values: 5.94448, 0.04463, 2.83346 6.89076, 0.29762 with score: 22.79207
+        // Best values: 7.94447, 0.25778, 3.83347 8.90936, 0.39767 with score: 22.61423
+	}
+
 	// Used to reduce shock from abrupt changes
 	// we need to know if we might be suddenly shifting the sails from one side to the other
 	s.lastOffWindAngle = 0.0
-	
+
 	// Whether debug info should be printed to the screen (turned off by autotune)
 	s.shouldPrint = true
 
@@ -235,7 +237,7 @@ func controlUpdate(s *simData) {
 	newRudderDir := lerp(constrainedPIDValue, -100, 100, optimalTurnLeft, optimalTurnRight)
 
 	// Smoothen out the change to the rudder
-	s.boat.rudderDirection = lerp(4.0 * s.controlInterval, 0, 1, s.boat.rudderDirection, newRudderDir)
+	s.boat.rudderDirection = lerp(4.0*s.controlInterval, 0, 1, s.boat.rudderDirection, newRudderDir)
 
 	if s.shouldPrint && s.timeStepOn%int(s.reportInterval/s.dt) == 0 {
 		fmt.Printf("\n\terror: %.2f pterm: %.2f iterm: %.2f dterm: %.2f Out: %.2f rudder: %.2f ", courseError, courseError*s.proportionK, s.integralTerm, -inputDerivative*s.derivativeK/s.controlInterval, constrainedPIDValue, s.boat.rudderDirection)
@@ -324,8 +326,8 @@ func controlUpdate(s *simData) {
 
 	s.lastOffWindAngle = offWindAngle
 	// Smoothen out the change to the sails
-	s.boat.mainDirection = lerp(4.0 * s.controlInterval, 0, 1, s.boat.mainDirection, newMainDirection)
-	s.boat.jibDirection = lerp(4.0 * s.controlInterval, 0, 1, s.boat.jibDirection, newJibDirection)
+	s.boat.mainDirection = lerp(4.0*s.controlInterval, 0, 1, s.boat.mainDirection, newMainDirection)
+	s.boat.jibDirection = lerp(4.0*s.controlInterval, 0, 1, s.boat.jibDirection, newJibDirection)
 }
 
 func performTimestep(s *simData) {
@@ -347,17 +349,18 @@ var imageWind windData
 
 func main() {
 	flag.Parse()
-    if *cpuprofile != "" {
-        f, err := os.Create(*cpuprofile)
-        if err != nil {
-            log.Fatal(err)
-        }
-        pprof.StartCPUProfile(f)
-        defer pprof.StopCPUProfile()
-    }
-	
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	//newtonOptimize(func(x []float64) float64 { return 2 * math.Pow(x[0], 4) + math.Pow(x[1], 2) + x[0] * x[1] }, []float64 {2, 2})
 	//autotunePID()
+    //autotunePIDSailPI()
 	//return
 
 	sim := startupSettings()

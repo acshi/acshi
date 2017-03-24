@@ -9,22 +9,22 @@ import (
 // Maximum absolute error of 0.000193
 func fastSin(theta float64) float64 {
 	theta /= 0.5 * math.Pi
-	
+
 	if theta < -1.0 {
 		theta += 4.0
 	} else if theta > 3.0 {
 		theta -= 4.0
 	}
-	
+
 	if theta > 1.0 && theta <= 3.0 {
 		theta = 2.0 - theta
 	}
-	
-	const A = 4.0 * (3.0 / math.Pi - 9.0 / 16.0)
-	const B = 2.0 * A - 5.0 / 2.0
-	const C = A - 3.0 / 2.0
+
+	const A = 4.0 * (3.0/math.Pi - 9.0/16.0)
+	const B = 2.0*A - 5.0/2.0
+	const C = A - 3.0/2.0
 	thetaSq := theta * theta
-	return theta * (A - thetaSq * (B - thetaSq * C))
+	return theta * (A - thetaSq*(B-thetaSq*C))
 }
 
 // From http://www.coranac.com/2009/07/sines/
@@ -32,22 +32,22 @@ func fastSin(theta float64) float64 {
 func fastCos(theta float64) float64 {
 	theta /= 0.5 * math.Pi
 	theta += 1.0
-	
+
 	if theta < -1.0 {
 		theta += 4.0
 	} else if theta > 3.0 {
 		theta -= 4.0
 	}
-	
+
 	if theta > 1.0 && theta <= 3.0 {
 		theta = 2.0 - theta
 	}
-	
-	const A = 4.0 * (3.0 / math.Pi - 9.0 / 16.0)
-	const B = 2.0 * A - 5.0 / 2.0
-	const C = A - 3.0 / 2.0
+
+	const A = 4.0 * (3.0/math.Pi - 9.0/16.0)
+	const B = 2.0*A - 5.0/2.0
+	const C = A - 3.0/2.0
 	thetaSq := theta * theta
-	return theta * (A - thetaSq * (B - thetaSq * C))
+	return theta * (A - thetaSq*(B-thetaSq*C))
 }
 
 // Converged to minimum in 10 iterations.
